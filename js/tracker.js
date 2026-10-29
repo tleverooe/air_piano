@@ -5,8 +5,12 @@ const MODEL_URL = 'https://storage.googleapis.com/mediapipe-models/hand_landmark
 
 // Landmark indices of the five fingertips: thumb, index, middle, ring, pinky.
 export const TIP_IDS = [4, 8, 12, 16, 20];
-// Knuckle (MCP joint) for each fingertip, used to tell a finger tap from the whole hand moving.
-const KNUCKLE_OF = { 4: 2, 8: 5, 12: 9, 16: 13, 20: 17 };
+
+// Rough distance estimate from a single camera:
+// a hand looks smaller the farther away it is, and MediaPipe's z says how far each fingertip
+// sits in front of or behind the wrist. Together they give each fingertip's distance in cm.
+const HAND_CM = 9;      // typical wrist-to-middle-knuckle length
+const LENS = 1.25;      // 2·tan(half the camera's horizontal field of view), about 64° for a webcam
 
 async function createLandmarker(fileset, delegate) {
   return HandLandmarker.createFromOptions(fileset, {
@@ -32,8 +36,8 @@ export async function createTracker() {
   let lastTips = [];
 
   return {
-    // Returns fingertips as { id, x, y, ky, scale } in 0..1, x already mirrored to match the screen.
-    // ky is the finger's knuckle height; scale is the hand size (wrist to middle knuckle).
+    // Returns fingertips as { id, x, y, dist }: x, y in 0..1 (x mirrored to match the screen),
+    // dist the estimated distance from the camera in cm.
     detect(video, now) {
       if (video.currentTime === lastVideoTime) return lastTips;
       lastVideoTime = video.currentTime;
@@ -45,15 +49,13 @@ export async function createTracker() {
         let label = result.handedness[h]?.[0]?.categoryName ?? 'Hand';
         if (seen.has(label)) label += h;
         seen.add(label);
-        const scale = Math.max(0.02, Math.hypot(hand[9].x - hand[0].x, hand[9].y - hand[0].y));
+        // Hand size as a fraction of frame width (y converted to the same units).
+        const aspect = video.videoHeight / video.videoWidth;
+        const scale = Math.max(0.01, Math.hypot(hand[9].x - hand[0].x, (hand[9].y - hand[0].y) * aspect));
         for (const tip of TIP_IDS) {
-          tips.push({
-            id: `${label}-${tip}`,
-            x: 1 - hand[tip].x,
-            y: hand[tip].y,
-            ky: hand[KNUCKLE_OF[tip]].y,
-            scale,
-          });
+          // hand[tip].z is relative to the wrist, in frame-width units; negative is nearer the camera.
+          const dist = (HAND_CM * (1 / LENS + hand[tip].z)) / scale;
+          tips.push({ id: `${label}-${tip}`, x: 1 - hand[tip].x, y: hand[tip].y, dist });
         }
       });
       lastTips = tips;
