@@ -81,6 +81,42 @@ h1 { margin: 0; font-size: 22px; letter-spacing: 0.04em; }
 }
 .start:disabled { opacity: 0.6; cursor: progress; }
 
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 12px 20px;
+  padding: 14px 16px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+
+.field { display: grid; gap: 4px; }
+.field.grow { flex: 1 1 180px; }
+.field > span, .keycount {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+
+select {
+  font: 600 15px var(--font-mono);
+  color: var(--fg);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 6px 8px;
+}
+
+input[type="range"] { width: 100%; accent-color: var(--accent); }
+
+.check { display: flex; align-items: center; gap: 8px; padding-bottom: 6px; cursor: pointer; }
+.check input { width: 18px; height: 18px; accent-color: var(--accent); }
+
+.keycount { margin: 0 0 6px auto; }
+
 button:focus-visible, select:focus-visible, input:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 3px;

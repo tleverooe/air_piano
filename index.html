@@ -22,6 +22,14 @@
     </div>
   </main>
 
+  <section class="controls" aria-label="设置">
+    <label class="field" for="lowSel"><span>最低音</span><select id="lowSel"></select></label>
+    <label class="field" for="highSel"><span>最高音</span><select id="highSel"></select></label>
+    <label class="check" for="blackChk"><input id="blackChk" type="checkbox"><span>黑键也排进这一排</span></label>
+    <label class="field grow" for="lineRange"><span>触发线高度</span><input id="lineRange" type="range" min="35" max="85" step="1"></label>
+    <p class="keycount" id="keyCount"></p>
+  </section>
+
   <video id="video" class="offscreen" playsinline muted></video>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>

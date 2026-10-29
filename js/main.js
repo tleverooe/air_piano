@@ -1,8 +1,9 @@
 import { startCamera, cameraErrorText } from './camera.js';
 import { createTracker } from './tracker.js';
 import { unlockAudio, createPiano } from './audio.js';
-import { buildKeys, drawKeys } from './keyboard.js';
+import { drawKeys } from './keyboard.js';
 import { createPlayer } from './player.js';
+import { initSettings } from './settings.js';
 
 const video = document.getElementById('video');
 const canvas = document.getElementById('canvas');
@@ -13,8 +14,14 @@ const statusEl = document.getElementById('status');
 
 let tracker = null;
 let player = null;
-let keys = buildKeys(60, 72, false); // C4 to C5, white keys
-let lineY = 0.62;                    // strike line, as a fraction of frame height
+let keys = [];
+let lineY = 0.62; // strike line, as a fraction of frame height
+
+initSettings((s) => {
+  player?.releaseAll();
+  keys = s.keys;
+  lineY = s.lineY;
+});
 
 function setStatus(text, kind = '') {
   statusEl.textContent = text;
