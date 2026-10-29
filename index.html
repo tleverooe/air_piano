@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>空中钢琴 Air Piano</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&display=swap">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="bar">
+    <h1>空中钢琴</h1>
+    <p class="status" id="status">点「开始」，允许使用摄像头</p>
+  </header>
+
+  <main class="stage-wrap">
+    <div class="stage" id="stage">
+      <canvas id="canvas"></canvas>
+      <button id="startBtn" class="start" type="button">开始</button>
+    </div>
+  </main>
+
+  <video id="video" class="offscreen" playsinline muted></video>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
