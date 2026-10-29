@@ -1,9 +1,11 @@
-import { keyAt } from './keyboard.js';
+import { keyAt, toKeyboard } from './keyboard.js';
 
 const SMOOTH = 0.6;     // 0..1, higher follows the hand faster, lower is steadier
 const LIFT = 0.1;       // how far (in hand sizes) a finger must come back up to release the note
 const LOST_MS = 150;    // a finger missing this long is treated as lifted
-const ABOVE = 0.08;     // a fingertip this far above the keyboard (fraction of frame height) still counts
+// A hovering fingertip sits higher on screen than the key under it, so allow some room past the front edge.
+const U_MIN = -0.1;
+const U_MAX = 1.35;
 
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 
@@ -62,14 +64,14 @@ export function createPlayer(piano) {
         }
         f.seen = now;
 
-        const u = (f.y - geom.top) / geom.height;
-        const overKeys = f.y > geom.top - ABOVE && u <= 1;
+        const { s, u } = toKeyboard(geom, f.x, f.y);
+        const overKeys = u >= U_MIN && u <= U_MAX && s >= 0 && s < 1;
 
         if (f.down) {
           f.peak = Math.max(f.peak, f.rel);
           if (f.rel < f.peak - LIFT || !overKeys) release(f);
         } else if (f.armed && overKeys && f.v > threshold) {
-          const key = keyAt(keys, f.x, clamp(u, 0, 1));
+          const key = keyAt(keys, s, clamp(u, 0, 1));
           if (key) press(f, key, threshold);
         } else if (f.v < threshold * 0.3) {
           // Only allow the next tap once this downward movement has settled.

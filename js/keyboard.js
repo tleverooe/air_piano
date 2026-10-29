@@ -31,65 +31,82 @@ export function buildKeys(lo, hi, includeBlack) {
   return keys;
 }
 
-// x: 0..1 across the screen. u: 0 at the back (top) edge of the keyboard, 1 at the front edge.
-export function keyAt(keys, x, u) {
-  if (x < 0 || x >= 1 || u < 0 || u > 1) return null;
+// s: 0..1 across the keyboard (low to high). u: 0 at the back edge (where black keys start), 1 at the front edge.
+export function keyAt(keys, s, u) {
+  if (s < 0 || s >= 1 || u < 0 || u > 1) return null;
   if (u < BLACK_LEN) {
-    const black = keys.find((k) => k.black && x >= k.x0 && x < k.x1);
+    const black = keys.find((k) => k.black && s >= k.x0 && s < k.x1);
     if (black) return black;
   }
-  return keys.find((k) => !k.black && x >= k.x0 && x < k.x1) || null;
+  return keys.find((k) => !k.black && s >= k.x0 && s < k.x1) || null;
+}
+
+// The keyboard lies flat on the desk and is seen from the laptop camera, like a mirror behind the piano:
+// the back edge (black keys) is nearest the camera, so it sits lower on screen and wider;
+// the front edge of the white keys is nearest the player, so it sits higher and narrower.
+// geom: { top, height } as fractions of frame height: top = front edge, top + height = back edge.
+const BACK_HALF = 0.49;  // half-width of the back edge, as a fraction of frame width
+const FRONT_HALF = 0.36; // half-width of the front edge
+
+const halfAt = (u) => BACK_HALF + (FRONT_HALF - BACK_HALF) * u;
+
+// Keyboard coordinates (s, u) to screen position (0..1).
+export function project(geom, s, u) {
+  return { x: 0.5 + (s - 0.5) * 2 * halfAt(u), y: geom.top + geom.height * (1 - u) };
+}
+
+// Screen position (0..1) to keyboard coordinates. u can fall outside 0..1 off the keyboard.
+export function toKeyboard(geom, x, y) {
+  const u = (geom.top + geom.height - y) / geom.height;
+  return { s: (x - 0.5) / (2 * halfAt(u)) + 0.5, u };
 }
 
 const INK = '#11131a';
-const IVORY = '#ece6d6';
 const BRASS = '#d9a441';
 const FELT = '#8c2f2a';
 
-function roundedBottomRect(ctx, x, y, w, h, r) {
+function quad(ctx, w, h, geom, s0, s1, u0, u1) {
+  const pts = [project(geom, s0, u0), project(geom, s1, u0), project(geom, s1, u1), project(geom, s0, u1)];
   ctx.beginPath();
-  ctx.moveTo(x, y);
-  ctx.lineTo(x + w, y);
-  ctx.lineTo(x + w, y + h - r);
-  ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
-  ctx.lineTo(x + r, y + h);
-  ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+  pts.forEach((p, i) => (i ? ctx.lineTo(p.x * w, p.y * h) : ctx.moveTo(p.x * w, p.y * h)));
   ctx.closePath();
 }
 
-// geom: { top, height } of the keyboard as fractions of the frame height.
 export function drawKeys(ctx, w, h, keys, geom, fingers, held) {
   if (!keys.length) return;
-  const top = geom.top * h;
-  const kh = geom.height * h;
 
-  // Keys a hovering finger is over, so you can see where a tap would land.
+  // Keys a hovering finger is over, so you can see where a press would land.
   const hover = new Set();
   for (const f of fingers) {
     if (f.down) continue;
-    const k = keyAt(keys, f.x, Math.min(1, Math.max(0, (f.y - geom.top) / geom.height)));
-    if (k && f.y > geom.top - 0.08 && f.y < geom.top + geom.height) hover.add(k.midi);
+    const { s, u } = toKeyboard(geom, f.x, f.y);
+    if (u < -0.1 || u > 1.35) continue;
+    const k = keyAt(keys, s, Math.min(1, Math.max(0, u)));
+    if (k) hover.add(k.midi);
   }
 
-  // Fallboard with the red felt strip, like the edge behind real keys.
-  const board = Math.max(6, kh * 0.08);
-  ctx.fillStyle = 'rgba(17, 19, 26, 0.85)';
-  ctx.fillRect(0, top - board, w, board);
+  // Fallboard between the keys and the camera, with the red felt strip along the back edge.
+  const back = geom.top + geom.height;
+  const boardH = geom.height * 0.12;
+  const bx = (0.5 - BACK_HALF * 1.02) * w;
+  ctx.fillStyle = 'rgba(17, 19, 26, 0.88)';
+  ctx.fillRect(bx, back * h, BACK_HALF * 2.04 * w, boardH * h);
   ctx.fillStyle = FELT;
-  ctx.fillRect(0, top - 3, w, 3);
+  ctx.fillRect(bx, back * h, BACK_HALF * 2.04 * w, 3);
 
   const whites = keys.filter((k) => !k.black);
   const blacks = keys.filter((k) => k.black);
-  const fontSize = Math.round(Math.max(10, Math.min((w / whites.length) * 0.22, 18)));
+  const gap = 0.12 / whites.length / 10;
+
+  const frontKeyPx = (2 * FRONT_HALF * w) / whites.length;
+  const fontSize = Math.round(Math.max(10, Math.min(frontKeyPx * 0.3, 18)));
   ctx.font = `600 ${fontSize}px "IBM Plex Mono", ui-monospace, monospace`;
   ctx.textAlign = 'center';
-  ctx.textBaseline = 'bottom';
+  ctx.textBaseline = 'middle';
 
   for (const k of whites) {
-    const x = k.x0 * w;
-    const kw = (k.x1 - k.x0) * w;
     const active = held.has(k.midi);
-    roundedBottomRect(ctx, x + 1, top, kw - 2, kh, Math.min(8, kw * 0.12));
+    quad(ctx, w, h, geom, k.x0 + gap, k.x1 - gap, 0, 1);
     ctx.fillStyle = active ? BRASS : 'rgba(236, 230, 214, 0.82)';
     ctx.fill();
     if (hover.has(k.midi) && !active) {
@@ -97,26 +114,20 @@ export function drawKeys(ctx, w, h, keys, geom, fingers, held) {
       ctx.strokeStyle = BRASS;
       ctx.stroke();
     }
+    const p = project(geom, (k.x0 + k.x1) / 2, 0.86);
     ctx.fillStyle = k.midi % 12 === 0 ? INK : 'rgba(17, 19, 26, 0.55)';
-    ctx.fillText(k.name, x + kw / 2, top + kh - 8);
+    ctx.fillText(k.name, p.x * w, p.y * h);
   }
 
   for (const k of blacks) {
-    const x = k.x0 * w;
-    const kw = (k.x1 - k.x0) * w;
     const active = held.has(k.midi);
-    roundedBottomRect(ctx, x, top, kw, kh * BLACK_LEN, Math.min(5, kw * 0.12));
+    quad(ctx, w, h, geom, k.x0, k.x1, 0, BLACK_LEN);
     ctx.fillStyle = active ? BRASS : 'rgba(17, 19, 26, 0.94)';
     ctx.fill();
     if (hover.has(k.midi) && !active) {
       ctx.lineWidth = 3;
       ctx.strokeStyle = BRASS;
       ctx.stroke();
-    } else if (!active) {
-      // A faint highlight down the key so it reads as raised.
-      ctx.fillStyle = 'rgba(236, 230, 214, 0.12)';
-      ctx.fillRect(x + kw * 0.2, top + 2, kw * 0.12, kh * BLACK_LEN - 8);
     }
   }
-  ctx.fillStyle = IVORY; // leave the context in a neutral state
 }

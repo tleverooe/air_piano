@@ -1,9 +1,9 @@
 import { buildKeys, midiToName, isBlack } from './keyboard.js';
 
-// v2: the keyboard became piano-shaped, so older saved settings (black keys off) are ignored.
-const STORE_KEY = 'air-piano-settings-v2';
-const DEFAULTS = { low: 48, high: 72, black: true, top: 66, sens: 5 }; // C3–C5 with black keys
-const KEYBOARD_HEIGHT = 0.26; // fraction of frame height
+// Bumped whenever the keyboard layout changes, so older saved positions don't carry over.
+const STORE_KEY = 'air-piano-settings-v3';
+const DEFAULTS = { low: 48, high: 72, black: true, top: 58, sens: 5 }; // C3–C5 with black keys
+const KEYBOARD_HEIGHT = 0.3; // front-to-back depth on screen, as a fraction of frame height
 const RANGE_MIN = 36; // C2
 const RANGE_MAX = 96; // C7
 

@@ -15,7 +15,7 @@ const statusEl = document.getElementById('status');
 let tracker = null;
 let player = null;
 let keys = [];
-let geom = { top: 0.66, height: 0.26 }; // keyboard position, as fractions of frame height
+let geom = { top: 0.58, height: 0.3 }; // keyboard position, as fractions of frame height
 let threshold = 1.5;                     // tap speed needed, in hand sizes per second
 
 initSettings((s) => {
@@ -95,7 +95,7 @@ async function start() {
     setStatus(`加载失败，请刷新重试：${err?.message || err}`, 'error');
     return;
   }
-  setStatus('手悬在键盘上方，手指往下点一下就会发声');
+  setStatus('手指往下按就会弹；往前伸（朝屏幕方向）够黑键');
 }
 
 startBtn.addEventListener('click', start);
