@@ -87,7 +87,7 @@ function frame(now) {
   const tips = tracker ? tracker.detect(video, now) : [];
   if (player) player.update(tips, now, keys, geom, planeCm);
   updateReadout(now);
-  const fingers = player ? [...player.fingers()] : tips;
+  const fingers = player ? [...player.fingers()] : tips.filter((t) => t.extended);
   drawKeys(ctx, w, h, keys, geom, fingers, player ? player.held : new Map());
   drawFingers(fingers);
   requestAnimationFrame(frame);

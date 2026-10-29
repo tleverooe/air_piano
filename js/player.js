@@ -51,6 +51,8 @@ export function createPlayer(piano) {
 
     update(tips, now, keys, geom, planeCm) {
       for (const t of tips) {
+        // Curled fingers are ignored; one that curls while held is released once it counts as lost.
+        if (!t.extended) continue;
         let f = fingers.get(t.id);
         if (!f) {
           f = { x: t.x, y: t.y, dist: t.dist, speed: 0, t: now, down: false, key: null };

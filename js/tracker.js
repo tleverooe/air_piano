@@ -1,4 +1,5 @@
 import { FilesetResolver, HandLandmarker } from 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs';
+import { isExtended } from './fingers.js';
 
 const WASM_URL = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm';
 const MODEL_URL = 'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task';
@@ -36,8 +37,8 @@ export async function createTracker() {
   let lastTips = [];
 
   return {
-    // Returns fingertips as { id, x, y, dist }: x, y in 0..1 (x mirrored to match the screen),
-    // dist the estimated distance from the camera in cm.
+    // Returns fingertips as { id, x, y, dist, extended }: x, y in 0..1 (x mirrored to match the screen),
+    // dist the estimated distance from the camera in cm, extended false for a finger curled into the palm.
     detect(video, now) {
       if (video.currentTime === lastVideoTime) return lastTips;
       lastVideoTime = video.currentTime;
@@ -55,7 +56,7 @@ export async function createTracker() {
         for (const tip of TIP_IDS) {
           // hand[tip].z is relative to the wrist, in frame-width units; negative is nearer the camera.
           const dist = (HAND_CM * (1 / LENS + hand[tip].z)) / scale;
-          tips.push({ id: `${label}-${tip}`, x: 1 - hand[tip].x, y: hand[tip].y, dist });
+          tips.push({ id: `${label}-${tip}`, x: 1 - hand[tip].x, y: hand[tip].y, dist, extended: isExtended(hand, tip, aspect) });
         }
       });
       lastTips = tips;
