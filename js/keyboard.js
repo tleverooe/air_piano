@@ -5,6 +5,9 @@ export const isBlack = (midi) => [1, 3, 6, 8, 10].includes(midi % 12);
 
 const BLACK_WIDTH = 0.58;  // black key width, as a fraction of a white key
 export const BLACK_LEN = 0.62; // black key length, as a fraction of the keyboard height
+// Black keys are easier to hit than they look: their touch area is wider and longer than drawn.
+const BLACK_HIT_WIDTH = 1.3;
+const BLACK_HIT_LEN = 0.72;
 
 // Lays the range out like a real piano seen from the front:
 // white keys side by side across the full width, black keys sitting on the boundaries between them.
@@ -34,8 +37,13 @@ export function buildKeys(lo, hi, includeBlack) {
 // s: 0..1 across the keyboard (low to high). u: 0 at the back edge (where black keys start), 1 at the front edge.
 export function keyAt(keys, s, u) {
   if (s < 0 || s >= 1 || u < 0 || u > 1) return null;
-  if (u < BLACK_LEN) {
-    const black = keys.find((k) => k.black && s >= k.x0 && s < k.x1);
+  if (u < BLACK_HIT_LEN) {
+    const black = keys.find((k) => {
+      if (!k.black) return false;
+      const c = (k.x0 + k.x1) / 2;
+      const half = ((k.x1 - k.x0) * BLACK_HIT_WIDTH) / 2;
+      return s >= c - half && s < c + half;
+    });
     if (black) return black;
   }
   return keys.find((k) => !k.black && s >= k.x0 && s < k.x1) || null;
@@ -79,7 +87,8 @@ export function drawKeys(ctx, w, h, keys, geom, fingers, held) {
   const hover = new Set();
   for (const f of fingers) {
     if (f.down) continue;
-    const { s, u } = toKeyboard(geom, f.x, f.y);
+    // Show the key the finger is aiming at (where it last rested), which is what a tap will play.
+    const { s, u } = f.aimS !== undefined ? { s: f.aimS, u: f.aimU } : toKeyboard(geom, f.x, f.y);
     if (u < -0.1 || u > 1.35) continue;
     const k = keyAt(keys, s, Math.min(1, Math.max(0, u)));
     if (k) hover.add(k.midi);
