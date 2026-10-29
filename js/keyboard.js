@@ -81,7 +81,7 @@ export function drawKeys(ctx, w, h, keys, geom, fingers, held) {
   const hover = new Set();
   for (const f of fingers) {
     if (f.down) continue;
-    const { s, u } = toKeyboard(geom, f.x, f.y);
+    const { s, u } = f.aim || toKeyboard(geom, f.x, f.y);
     const k = keyAt(keys, s, u);
     if (k) hover.add(k.midi);
   }
