@@ -1,4 +1,5 @@
 import { startCamera, cameraErrorText } from './camera.js';
+import { createTracker } from './tracker.js';
 
 const video = document.getElementById('video');
 const canvas = document.getElementById('canvas');
@@ -28,8 +29,25 @@ function drawVideo() {
   ctx.restore();
 }
 
-function frame() {
+let tracker = null;
+
+function drawTips(tips) {
+  const { width: w, height: h } = canvas;
+  const r = Math.max(6, w * 0.008);
+  for (const t of tips) {
+    ctx.beginPath();
+    ctx.arc(t.x * w, t.y * h, r, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(236, 230, 214, 0.85)';
+    ctx.fill();
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = '#11131a';
+    ctx.stroke();
+  }
+}
+
+function frame(now) {
   drawVideo();
+  if (tracker) drawTips(tracker.detect(video, now));
   requestAnimationFrame(frame);
 }
 
@@ -45,8 +63,16 @@ async function start() {
   }
   fitCanvas();
   startBtn.hidden = true;
-  setStatus('摄像头已开启');
   requestAnimationFrame(frame);
+
+  setStatus('正在加载手部识别模型…');
+  try {
+    tracker = await createTracker();
+  } catch (err) {
+    setStatus(`手部识别模型加载失败：${err?.message || err}`, 'error');
+    return;
+  }
+  setStatus('把手举到镜头前');
 }
 
 startBtn.addEventListener('click', start);
