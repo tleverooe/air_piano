@@ -11,18 +11,22 @@ const ctx = canvas.getContext('2d');
 const stage = document.getElementById('stage');
 const startBtn = document.getElementById('startBtn');
 const statusEl = document.getElementById('status');
+const calibBtn = document.getElementById('calibBtn');
+const distReadout = document.getElementById('distReadout');
+
+const READY_TEXT = '手指往前伸到按键平面就会响，往回收就松开';
 
 let tracker = null;
 let player = null;
 let keys = [];
-let geom = { top: 0.58, height: 0.3 }; // keyboard position, as fractions of frame height
-let threshold = 1.5;                     // tap speed needed, in hand sizes per second
+let geom = { top: 0.3, height: 0.5 }; // keyboard position, as fractions of frame height
+let planeCm = 40;                     // the virtual keyboard plane's distance from the camera
 
-initSettings((s) => {
+const settings = initSettings((s) => {
   player?.releaseAll();
   keys = s.keys;
   geom = s.geom;
-  threshold = s.threshold;
+  planeCm = s.planeCm;
 });
 
 function setStatus(text, kind = '') {
@@ -46,10 +50,19 @@ function drawVideo() {
   ctx.restore();
 }
 
+// Each fingertip gets a ring that shrinks onto it as the finger approaches the plane.
 function drawFingers(fingers) {
   const { width: w, height: h } = canvas;
   const r = Math.max(6, w * 0.008);
   for (const f of fingers) {
+    if (!f.down && f.dist !== undefined) {
+      const t = Math.min(1, Math.max(0, (f.dist - planeCm) / 20));
+      ctx.beginPath();
+      ctx.arc(f.x * w, f.y * h, r * (1.6 + 3 * t), 0, Math.PI * 2);
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = `rgba(217, 164, 65, ${0.9 - 0.6 * t})`;
+      ctx.stroke();
+    }
     ctx.beginPath();
     ctx.arc(f.x * w, f.y * h, f.down ? r * 1.5 : r, 0, Math.PI * 2);
     ctx.fillStyle = f.down ? '#d9a441' : 'rgba(236, 230, 214, 0.85)';
@@ -60,11 +73,20 @@ function drawFingers(fingers) {
   }
 }
 
+let lastReadout = 0;
+function updateReadout(now) {
+  if (!player || now - lastReadout < 150) return;
+  lastReadout = now;
+  const d = player.nearest();
+  distReadout.textContent = d === null ? '最近的手指：没看到手' : `最近的手指：${Math.round(d)} cm`;
+}
+
 function frame(now) {
   const { width: w, height: h } = canvas;
   drawVideo();
   const tips = tracker ? tracker.detect(video, now) : [];
-  if (player) player.update(tips, now, keys, geom, threshold);
+  if (player) player.update(tips, now, keys, geom, planeCm);
+  updateReadout(now);
   const fingers = player ? [...player.fingers()] : tips;
   drawKeys(ctx, w, h, keys, geom, fingers, player ? player.held : new Map());
   drawFingers(fingers);
@@ -95,7 +117,33 @@ async function start() {
     setStatus(`加载失败，请刷新重试：${err?.message || err}`, 'error');
     return;
   }
-  setStatus('手指往下按就会弹；往前伸（朝屏幕方向）够黑键');
+  calibBtn.disabled = false;
+  setStatus(READY_TEXT);
+}
+
+// Countdown, then average the nearest fingertip's distance for half a second and put the plane there.
+async function calibrate() {
+  calibBtn.disabled = true;
+  for (let n = 3; n > 0; n--) {
+    setStatus(`把指尖伸到你想要的按键位置，停住… ${n}`);
+    await new Promise((r) => setTimeout(r, 1000));
+  }
+  const samples = [];
+  const end = performance.now() + 500;
+  while (performance.now() < end) {
+    const d = player.nearest();
+    if (d !== null) samples.push(d);
+    await new Promise((r) => setTimeout(r, 50));
+  }
+  calibBtn.disabled = false;
+  if (!samples.length) {
+    setStatus('没看到手，再试一次', 'error');
+    return;
+  }
+  const avg = samples.reduce((a, b) => a + b, 0) / samples.length;
+  settings.setPlane(avg);
+  setStatus(`按键平面设在 ${Math.round(avg)} cm。${READY_TEXT}`);
 }
 
 startBtn.addEventListener('click', start);
+calibBtn.addEventListener('click', calibrate);

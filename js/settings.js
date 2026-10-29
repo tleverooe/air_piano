@@ -1,9 +1,9 @@
 import { buildKeys, midiToName, isBlack } from './keyboard.js';
 
 // Bumped whenever the keyboard layout changes, so older saved positions don't carry over.
-const STORE_KEY = 'air-piano-settings-v3';
-const DEFAULTS = { low: 48, high: 72, black: true, top: 58, sens: 5 }; // C3–C5 with black keys
-const KEYBOARD_HEIGHT = 0.3; // front-to-back depth on screen, as a fraction of frame height
+const STORE_KEY = 'air-piano-settings-v4';
+const DEFAULTS = { low: 48, high: 72, black: true, top: 30, plane: 40 }; // C3–C5 with black keys
+const KEYBOARD_HEIGHT = 0.5; // fraction of frame height
 const RANGE_MIN = 36; // C2
 const RANGE_MAX = 96; // C7
 
@@ -23,13 +23,15 @@ function save(s) {
   }
 }
 
-// Wires up the controls and calls onChange({ keys, geom, threshold }) now and on every change.
+// Wires up the controls and calls onChange({ keys, geom, planeCm }) now and on every change.
+// Returns { setPlane(cm) } so calibration can move the plane slider.
 export function initSettings(onChange) {
   const lowSel = document.getElementById('lowSel');
   const highSel = document.getElementById('highSel');
   const blackChk = document.getElementById('blackChk');
   const topRange = document.getElementById('topRange');
-  const sensRange = document.getElementById('sensRange');
+  const planeRange = document.getElementById('planeRange');
+  const planeOut = document.getElementById('planeOut');
   const keyCount = document.getElementById('keyCount');
 
   for (let midi = RANGE_MIN; midi <= RANGE_MAX; midi++) {
@@ -43,7 +45,7 @@ export function initSettings(onChange) {
   highSel.value = s.high;
   blackChk.checked = s.black;
   topRange.value = s.top;
-  sensRange.value = s.sens;
+  planeRange.value = s.plane;
 
   function emit() {
     let low = Number(lowSel.value);
@@ -51,8 +53,9 @@ export function initSettings(onChange) {
     if (low > high) [low, high] = [high, low];
     const black = blackChk.checked;
     const top = Number(topRange.value);
-    const sens = Number(sensRange.value);
-    save({ low, high, black, top, sens });
+    const plane = Number(planeRange.value);
+    save({ low, high, black, top, plane });
+    planeOut.textContent = `${plane} cm`;
 
     const keys = buildKeys(low, high, black);
     const whites = keys.filter((k) => !k.black).length;
@@ -60,11 +63,17 @@ export function initSettings(onChange) {
     onChange({
       keys,
       geom: { top: top / 100, height: KEYBOARD_HEIGHT },
-      // Sensitivity 1..10 maps to the tap speed needed, in hand sizes per second.
-      threshold: 2.6 - 0.22 * sens,
+      planeCm: plane,
     });
   }
 
-  for (const el of [lowSel, highSel, blackChk, topRange, sensRange]) el.addEventListener('input', emit);
+  for (const el of [lowSel, highSel, blackChk, topRange, planeRange]) el.addEventListener('input', emit);
   emit();
+
+  return {
+    setPlane(cm) {
+      planeRange.value = Math.round(cm);
+      emit();
+    },
+  };
 }
