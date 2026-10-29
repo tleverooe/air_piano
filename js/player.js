@@ -14,7 +14,7 @@ export function createPlayer(piano) {
   const held = new Map(); // midi -> how many fingers are holding it
 
   function press(f, key) {
-    const velocity = clamp(0.3 + (f.vy || 0) * 0.3, 0.3, 1);
+    const velocity = clamp(0.3 + (f.vy || 0) * 0.2, 0.3, 1);
     piano.triggerAttack(key.name, undefined, velocity);
     held.set(key.midi, (held.get(key.midi) || 0) + 1);
     f.down = true;
