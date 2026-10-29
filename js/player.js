@@ -3,6 +3,8 @@ import { keyAt, toKeyboard } from './keyboard.js';
 const SMOOTH = 0.6;     // 0..1, higher follows the hand faster, lower is steadier
 const LIFT = 0.1;       // how far (in hand sizes) a finger must come back up to release the note
 const LOST_MS = 150;    // a finger missing this long is treated as lifted
+const CHORD = 0.85;     // within one hand, other fingers must move at least this fraction as fast as the fastest to also play
+const FOLLOW_MS = 120;  // how long a hand's last tap still counts when judging fingers that move a moment later
 // A hovering fingertip sits higher on screen than the key under it, so allow some room past the front edge.
 const U_MIN = -0.1;
 const U_MAX = 1.35;
@@ -12,10 +14,14 @@ const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 // Turns finger taps into note on / note off.
 // A tap is the fingertip moving down quickly relative to its own knuckle,
 // so moving the whole hand up and down doesn't play anything.
-// The key played is the one under the fingertip at that moment.
+// Within one hand only the fastest finger plays (plus any moving nearly as fast, for chords),
+// so neighbouring fingers that get dragged along stay silent.
+// The key played is the one the finger was resting over just before the tap (the highlighted key),
+// not where the tip ends up, because pressing down also moves the tip on screen.
 export function createPlayer(piano) {
   const fingers = new Map();
   const held = new Map(); // midi -> how many fingers are holding it
+  const lastTap = new Map(); // hand -> { t, v } of its most recent tap
 
   function press(f, key, threshold) {
     const velocity = clamp(0.3 + 0.25 * (f.v / threshold), 0.35, 1);
@@ -47,6 +53,8 @@ export function createPlayer(piano) {
 
     // geom: { top, height } of the keyboard; threshold: tap speed needed, in hand sizes per second.
     update(tips, now, keys, geom, threshold) {
+      const candidates = [];
+
       for (const t of tips) {
         const rel = (t.y - t.ky) / t.scale; // how far the tip hangs below its knuckle
         let f = fingers.get(t.id);
@@ -64,18 +72,35 @@ export function createPlayer(piano) {
         }
         f.seen = now;
 
-        const { s, u } = toKeyboard(geom, f.x, f.y);
-        const overKeys = u >= U_MIN && u <= U_MAX && s >= 0 && s < 1;
-
         if (f.down) {
           f.peak = Math.max(f.peak, f.rel);
-          if (f.rel < f.peak - LIFT || !overKeys) release(f);
-        } else if (f.armed && overKeys && f.v > threshold) {
-          const key = keyAt(keys, s, clamp(u, 0, 1));
-          if (key) press(f, key, threshold);
+          if (f.rel < f.peak - LIFT) release(f);
         } else if (f.v < threshold * 0.3) {
-          // Only allow the next tap once this downward movement has settled.
+          // Settled: remember where the finger is aiming, and allow the next tap.
+          const { s, u } = toKeyboard(geom, f.x, f.y);
+          f.aimS = s;
+          f.aimU = u;
           f.armed = true;
+        } else if (f.armed && f.v > threshold && f.aimS !== undefined) {
+          const overKeys = f.aimU >= U_MIN && f.aimU <= U_MAX && f.aimS >= 0 && f.aimS < 1;
+          const key = overKeys && keyAt(keys, f.aimS, clamp(f.aimU, 0, 1));
+          if (key) candidates.push({ f, key, hand: t.id.split('-')[0] });
+        }
+      }
+
+      const fastest = new Map();
+      for (const [hand, tap] of lastTap) {
+        if (now - tap.t < FOLLOW_MS) fastest.set(hand, tap.v);
+      }
+      for (const c of candidates) fastest.set(c.hand, Math.max(fastest.get(c.hand) || 0, c.f.v));
+      for (const c of candidates) {
+        if (c.f.v >= CHORD * fastest.get(c.hand)) {
+          press(c.f, c.key, threshold);
+          const prev = lastTap.get(c.hand);
+          const v = prev && now - prev.t < FOLLOW_MS ? Math.max(prev.v, c.f.v) : c.f.v;
+          lastTap.set(c.hand, { t: now, v });
+        } else {
+          c.f.armed = false; // a dragged-along finger has to settle before it can tap
         }
       }
 
