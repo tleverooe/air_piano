@@ -5,6 +5,8 @@ const MODEL_URL = 'https://storage.googleapis.com/mediapipe-models/hand_landmark
 
 // Landmark indices of the five fingertips: thumb, index, middle, ring, pinky.
 export const TIP_IDS = [4, 8, 12, 16, 20];
+// Knuckle (MCP joint) for each fingertip, used to tell a finger tap from the whole hand moving.
+const KNUCKLE_OF = { 4: 2, 8: 5, 12: 9, 16: 13, 20: 17 };
 
 async function createLandmarker(fileset, delegate) {
   return HandLandmarker.createFromOptions(fileset, {
@@ -30,7 +32,8 @@ export async function createTracker() {
   let lastTips = [];
 
   return {
-    // Returns fingertips as { id, x, y } in 0..1, x already mirrored to match the screen.
+    // Returns fingertips as { id, x, y, ky, scale } in 0..1, x already mirrored to match the screen.
+    // ky is the finger's knuckle height; scale is the hand size (wrist to middle knuckle).
     detect(video, now) {
       if (video.currentTime === lastVideoTime) return lastTips;
       lastVideoTime = video.currentTime;
@@ -42,8 +45,15 @@ export async function createTracker() {
         let label = result.handedness[h]?.[0]?.categoryName ?? 'Hand';
         if (seen.has(label)) label += h;
         seen.add(label);
+        const scale = Math.max(0.02, Math.hypot(hand[9].x - hand[0].x, hand[9].y - hand[0].y));
         for (const tip of TIP_IDS) {
-          tips.push({ id: `${label}-${tip}`, x: 1 - hand[tip].x, y: hand[tip].y });
+          tips.push({
+            id: `${label}-${tip}`,
+            x: 1 - hand[tip].x,
+            y: hand[tip].y,
+            ky: hand[KNUCKLE_OF[tip]].y,
+            scale,
+          });
         }
       });
       lastTips = tips;
