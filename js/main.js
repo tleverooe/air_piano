@@ -15,12 +15,14 @@ const statusEl = document.getElementById('status');
 let tracker = null;
 let player = null;
 let keys = [];
-let lineY = 0.62; // strike line, as a fraction of frame height
+let geom = { top: 0.66, height: 0.26 }; // keyboard position, as fractions of frame height
+let threshold = 1.5;                     // tap speed needed, in hand sizes per second
 
 initSettings((s) => {
   player?.releaseAll();
   keys = s.keys;
-  lineY = s.lineY;
+  geom = s.geom;
+  threshold = s.threshold;
 });
 
 function setStatus(text, kind = '') {
@@ -62,9 +64,9 @@ function frame(now) {
   const { width: w, height: h } = canvas;
   drawVideo();
   const tips = tracker ? tracker.detect(video, now) : [];
-  if (player) player.update(tips, now, keys, lineY);
+  if (player) player.update(tips, now, keys, geom, threshold);
   const fingers = player ? [...player.fingers()] : tips;
-  drawKeys(ctx, w, h, keys, lineY, fingers, player ? player.held : new Map());
+  drawKeys(ctx, w, h, keys, geom, fingers, player ? player.held : new Map());
   drawFingers(fingers);
   requestAnimationFrame(frame);
 }
@@ -93,7 +95,7 @@ async function start() {
     setStatus(`加载失败，请刷新重试：${err?.message || err}`, 'error');
     return;
   }
-  setStatus('手指从虚线上方往下穿过去就会发声');
+  setStatus('手悬在键盘上方，手指往下点一下就会发声');
 }
 
 startBtn.addEventListener('click', start);
