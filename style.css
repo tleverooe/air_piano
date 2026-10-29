@@ -117,29 +117,6 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
 
 .keycount { margin: 0 0 6px auto; }
 
-.field output { color: var(--fg); font-variant-numeric: tabular-nums; }
-
-.calib { display: grid; gap: 4px; justify-items: start; }
-
-.btn {
-  font: 600 14px var(--font-ui);
-  color: var(--accent-ink);
-  background: var(--accent);
-  border: 0;
-  border-radius: 6px;
-  padding: 7px 14px;
-  cursor: pointer;
-}
-.btn:disabled { opacity: 0.45; cursor: not-allowed; }
-
-.readout {
-  margin: 0;
-  font-family: var(--font-mono);
-  font-size: 12px;
-  color: var(--muted);
-  font-variant-numeric: tabular-nums;
-}
-
 button:focus-visible, select:focus-visible, input:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 3px;
