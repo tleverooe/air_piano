@@ -34,6 +34,8 @@ export async function createTracker() {
   return {
     // Returns fingertips as { id, hand, x, y, bend }: x, y in 0..1 (x mirrored to match the screen).
     // bend is how far the tip hangs below its own knuckle, in hand sizes; it grows as the finger presses down.
+    // palmX, palmY: the middle of the hand's knuckle row (same for all five tips of a hand).
+    // slot: 0..4, the finger's place in the hand from left to right on screen (thumb is 0 or 4).
     detect(video, now) {
       if (video.currentTime === lastVideoTime) return lastTips;
       lastVideoTime = video.currentTime;
@@ -48,10 +50,26 @@ export async function createTracker() {
         // Hand size as a fraction of frame width (y converted to the same units).
         const aspect = video.videoHeight / video.videoWidth;
         const scale = Math.max(0.01, Math.hypot(hand[9].x - hand[0].x, (hand[9].y - hand[0].y) * aspect));
-        for (const tip of TIP_IDS) {
+        // Knuckles are steadier than fingertips, so they set the hand's position and orientation.
+        const row = [5, 9, 13, 17];
+        const palmX = 1 - row.reduce((a, i) => a + hand[i].x, 0) / row.length;
+        const palmY = row.reduce((a, i) => a + hand[i].y, 0) / row.length;
+        // On the mirrored screen: if the index knuckle is left of the pinky knuckle, the thumb is on the left.
+        const thumbLeft = 1 - hand[5].x < 1 - hand[17].x;
+        TIP_IDS.forEach((tip, i) => {
           const bend = ((hand[tip].y - hand[KNUCKLE_OF[tip]].y) * aspect) / scale;
-          tips.push({ id: `${label}-${tip}`, hand: label, x: 1 - hand[tip].x, y: hand[tip].y, bend });
-        }
+          tips.push({
+            id: `${label}-${tip}`,
+            hand: label,
+            x: 1 - hand[tip].x,
+            y: hand[tip].y,
+            bend,
+            thumb: tip === 4,
+            slot: thumbLeft ? i : 4 - i,
+            palmX,
+            palmY,
+          });
+        });
       });
       lastTips = tips;
       return tips;
