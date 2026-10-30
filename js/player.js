@@ -8,6 +8,7 @@ const LOST_MS = 150;      // a finger missing this long is treated as lifted
 const WARMUP_MS = 300;    // a newly seen finger is only watched, not played, for this long: the first frames are jumpy
 const REST_UP = 0.5;      // how quickly the resting position follows a finger that lifts higher (per frame)
 const REST_UP_MAX = 0.03; // ...but never more than this many hand sizes per frame, so a burst of bad frames can't drag it
+const MAX_HOLD_MS = 2500; // a finger held longer than this is let go and its resting position reset to where it is now
 const HELD_DRIFT = 0.02;  // while held, the resting position still creeps toward the finger, so a press that
                           // was misjudged can't stay stuck forever (a real hold releases after about 2 s)
 const THUMB = 0.6;        // the thumb presses at an angle and shows less movement on camera, so it needs less
@@ -82,7 +83,8 @@ export function createPlayer(piano) {
     };
   }
 
-  function press(f, key, threshold) {
+  function press(f, key, threshold, now) {
+    f.downAt = now;
     const velocity = clamp(0.35 + 0.6 * ((f.depth - threshold) / threshold), 0.35, 1);
     sustained.delete(key.name);
     piano.triggerAttack(key.name, undefined, velocity);
@@ -145,6 +147,10 @@ export function createPlayer(piano) {
         f.warming = now - f.born < WARMUP_MS;
         if (f.warming) {
           // Just appeared: tracking is still settling, so simply follow the finger.
+          f.rest = f.bend;
+        } else if (f.down && now - f.downAt > MAX_HOLD_MS) {
+          // Held too long: almost certainly a misread. Let go and treat the current shape as relaxed.
+          release(f);
           f.rest = f.bend;
         } else if (f.down) {
           f.rest += HELD_DRIFT * (f.bend - f.rest);
@@ -215,7 +221,7 @@ export function createPlayer(piano) {
             f.blocked = true; // dragged along by a neighbour: must relax before it can play
             continue;
           }
-          press(f, f.aimKey, f.need);
+          press(f, f.aimKey, f.need, now);
         }
       }
 
