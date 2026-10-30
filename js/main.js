@@ -1,7 +1,7 @@
 import { startCamera, cameraErrorText } from './camera.js';
 import { createTracker } from './tracker.js';
 import { unlockAudio, createPiano } from './audio.js';
-import { drawKeys, U_MIN, U_MAX } from './keyboard.js';
+import { drawKeys } from './keyboard.js';
 import { createPlayer } from './player.js';
 import { initSettings } from './settings.js';
 
@@ -18,12 +18,14 @@ let player = null;
 let keys = [];
 let geom = { top: 0.58, height: 0.3 }; // keyboard position, as fractions of frame height
 let threshold = 0.25;                  // how far a finger must bend down to press, in hand sizes
+let mode = 'hand';                     // 'hand': hand position picks the keys; 'aim': fingertip picks the key
 
 initSettings((s) => {
   player?.releaseAll();
   keys = s.keys;
   geom = s.geom;
   threshold = s.threshold;
+  mode = s.mode;
 });
 
 function setStatus(text, kind = '') {
@@ -58,6 +60,18 @@ function drawFingers(fingers) {
     ctx.lineWidth = 2;
     ctx.strokeStyle = '#11131a';
     ctx.stroke();
+    if (mode === 'hand' && f.aimKey && !debugChk.checked) {
+      // Show which note each finger owns right now.
+      const label = (f.down && f.key ? f.key : f.aimKey).name;
+      ctx.font = `600 ${Math.round(r * 1.6)}px "IBM Plex Mono", ui-monospace, monospace`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'bottom';
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = 'rgba(17, 19, 26, 0.85)';
+      ctx.strokeText(label, f.x * w, f.y * h - r * 1.6);
+      ctx.fillStyle = f.down ? '#d9a441' : '#ece6d6';
+      ctx.fillText(label, f.x * w, f.y * h - r * 1.6);
+    }
     if (debugChk.checked && f.depth !== undefined) drawDebugBar(f, w, h, r);
   }
 }
@@ -70,9 +84,9 @@ function drawDebugBar(f, w, h, r) {
   const bh = Math.max(40, h * 0.09);
   const x = f.x * w + r * 1.8;
   const bottom = f.y * h + bh / 2;
-  const full = threshold * 2; // the bar's height represents twice the press depth
+  const full = (f.need || threshold) * 2; // the bar's height represents twice the press depth
   const fill = Math.min(1, Math.max(0, f.depth / full));
-  const off = !f.aim || f.aim.u < U_MIN || f.aim.u > U_MAX;
+  const off = !f.aimKey;
 
   ctx.fillStyle = 'rgba(17, 19, 26, 0.75)';
   ctx.fillRect(x, bottom - bh, bw, bh);
@@ -96,7 +110,7 @@ function frame(now) {
   const { width: w, height: h } = canvas;
   drawVideo();
   const tips = tracker ? tracker.detect(video, now) : [];
-  if (player) player.update(tips, now, keys, geom, threshold);
+  if (player) player.update(tips, now, keys, geom, threshold, mode);
   const fingers = player ? [...player.fingers()] : tips;
   drawKeys(ctx, w, h, keys, geom, fingers, player ? player.held : new Map());
   drawFingers(fingers);
@@ -127,7 +141,7 @@ async function start() {
     setStatus(`加载失败，请刷新重试：${err?.message || err}`, 'error');
     return;
   }
-  setStatus('手背放平，手指像弹琴一样往下按就会响');
+  setStatus('手背放平，手指往下按就会响；左右移动手来换音');
 }
 
 startBtn.addEventListener('click', start);
