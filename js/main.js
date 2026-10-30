@@ -19,6 +19,10 @@ let keys = [];
 let geom = { top: 0.58, height: 0.3 }; // keyboard position, as fractions of frame height
 let threshold = 0.25;                  // how far a finger must bend down to press, in hand sizes
 let mode = 'hand';                     // 'hand': hand position picks the keys; 'aim': fingertip picks the key
+let sustainOn = false;                 // the "always sustain" setting
+let spaceHeld = false;                 // holding the space bar works like holding the sustain pedal
+
+const pedalDown = () => sustainOn || spaceHeld;
 
 initSettings((s) => {
   player?.releaseAll();
@@ -26,6 +30,8 @@ initSettings((s) => {
   geom = s.geom;
   threshold = s.threshold;
   mode = s.mode;
+  sustainOn = s.sustain;
+  player?.setPedal(pedalDown());
 });
 
 function setStatus(text, kind = '') {
@@ -74,6 +80,27 @@ function drawFingers(fingers) {
     }
     if (debugChk.checked && f.depth !== undefined) drawDebugBar(f, w, h, r);
   }
+}
+
+// A tag in the corner while the sustain pedal is down.
+function drawPedalTag() {
+  const { width: w, height: h } = canvas;
+  const fs = Math.round(Math.max(13, h * 0.026));
+  ctx.font = `600 ${fs}px system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif`;
+  const label = spaceHeld ? '延音（空格）' : '延音';
+  const tw = ctx.measureText(label).width + fs * 1.4;
+  const th = fs * 1.7;
+  const x = fs;
+  const y = fs;
+  ctx.beginPath();
+  ctx.roundRect(x, y, tw, th, th / 2);
+  ctx.fillStyle = 'rgba(217, 164, 65, 0.95)';
+  ctx.fill();
+  ctx.fillStyle = '#1a1405';
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(label, x + fs * 0.7, y + th / 2 + 1);
+  ctx.fillStyle = '#ece6d6';
 }
 
 // Hand mode: a tag above each hand saying whether it's on the white or black keys,
@@ -150,6 +177,7 @@ function frame(now) {
   drawKeys(ctx, w, h, keys, geom, fingers, player ? player.held : new Map());
   drawFingers(fingers);
   if (player && mode === 'hand') drawHandTags(player.hands());
+  if (player && pedalDown()) drawPedalTag();
   requestAnimationFrame(frame);
 }
 
@@ -173,11 +201,28 @@ async function start() {
     const [t, piano] = await Promise.all([createTracker(), createPiano()]);
     tracker = t;
     player = createPlayer(piano);
+    player.setPedal(pedalDown());
   } catch (err) {
     setStatus(`加载失败，请刷新重试：${err?.message || err}`, 'error');
     return;
   }
   setStatus('手背放平，手指往下按就会响；左右移动手来换音');
 }
+
+// Space bar = sustain pedal. Ignored while typing in a control so it doesn't fight with the page.
+function setSpace(down) {
+  if (spaceHeld === down) return;
+  spaceHeld = down;
+  player?.setPedal(pedalDown());
+}
+window.addEventListener('keydown', (e) => {
+  if (e.code !== 'Space' || e.target.closest?.('select, input, button')) return;
+  e.preventDefault();
+  setSpace(true);
+});
+window.addEventListener('keyup', (e) => {
+  if (e.code === 'Space') setSpace(false);
+});
+window.addEventListener('blur', () => setSpace(false));
 
 startBtn.addEventListener('click', start);

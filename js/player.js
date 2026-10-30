@@ -41,6 +41,8 @@ export function createPlayer(piano) {
   const held = new Map(); // midi -> how many fingers are holding it
   const windows = new Map(); // `${hand}/white` or `${hand}/black` -> index of the leftmost key it covers
   const hands = new Map();   // hand -> { x, y, home, push, sharp } (hand mode)
+  const sustained = new Set(); // notes let go of while the pedal was down, still ringing
+  let pedal = false;
 
   // Picks a 5-key window, given where the hand's middle sits as a (fractional) index into the row,
   // with some stickiness at the boundaries.
@@ -76,6 +78,7 @@ export function createPlayer(piano) {
 
   function press(f, key, threshold) {
     const velocity = clamp(0.35 + 0.6 * ((f.depth - threshold) / threshold), 0.35, 1);
+    sustained.delete(key.name);
     piano.triggerAttack(key.name, undefined, velocity);
     held.set(key.midi, (held.get(key.midi) || 0) + 1);
     f.down = true;
@@ -87,7 +90,8 @@ export function createPlayer(piano) {
       const n = (held.get(f.key.midi) || 1) - 1;
       if (n <= 0) {
         held.delete(f.key.midi);
-        piano.triggerRelease(f.key.name);
+        if (pedal) sustained.add(f.key.name); // pedal down: keep ringing until it comes up
+        else piano.triggerRelease(f.key.name);
       } else {
         held.set(f.key.midi, n);
       }
@@ -204,6 +208,16 @@ export function createPlayer(piano) {
           release(f);
           fingers.delete(id);
         }
+      }
+    },
+
+    // Sustain pedal: while down, notes keep ringing after the finger lifts.
+    setPedal(down) {
+      if (down === pedal) return;
+      pedal = down;
+      if (!down) {
+        for (const name of sustained) piano.triggerRelease(name);
+        sustained.clear();
       }
     },
 
