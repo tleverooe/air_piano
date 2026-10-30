@@ -5,6 +5,11 @@ const RELEASE = 0.45;     // a pressed finger releases once its press depth fall
 const REST_DRIFT = 0.03;  // how quickly a finger's resting position follows it when it settles lower (per frame)
 const CHORD = 0.7;        // within one hand, a finger must press at least this fraction as deep as the deepest to play
 const LOST_MS = 150;      // a finger missing this long is treated as lifted
+const WARMUP_MS = 300;    // a newly seen finger is only watched, not played, for this long: the first frames are jumpy
+const REST_UP = 0.5;      // how quickly the resting position follows a finger that lifts higher (per frame)
+const REST_UP_MAX = 0.03; // ...but never more than this many hand sizes per frame, so a burst of bad frames can't drag it
+const HELD_DRIFT = 0.02;  // while held, the resting position still creeps toward the finger, so a press that
+                          // was misjudged can't stay stuck forever (a real hold releases after about 2 s)
 const THUMB = 0.6;        // the thumb presses at an angle and shows less movement on camera, so it needs less
 const HAND_KEYS = 5;      // in hand mode, each hand covers this many white keys
 const SHIFT_HYST = 0.35;  // in hand mode, how far (in white keys) past a boundary the hand must move to shift
@@ -17,6 +22,7 @@ const PUSH_OUT = 0.06;
 const HOME_DRIFT = 0.02;
 
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+const median3 = (a, b, c) => Math.max(Math.min(a, b), Math.min(Math.max(a, b), c));
 
 // Turns finger presses into note on / note off.
 //
@@ -122,10 +128,13 @@ export function createPlayer(piano) {
       for (const t of tips) {
         let f = fingers.get(t.id);
         if (!f) {
-          f = { hand: t.hand, thumb: t.thumb, x: t.x, y: t.y, bend: t.bend, rest: t.bend, depth: 0, down: false, key: null };
+          f = { hand: t.hand, thumb: t.thumb, x: t.x, y: t.y, bend: t.bend, rest: t.bend, depth: 0, down: false, key: null, born: now, raw: [t.bend, t.bend] };
           fingers.set(t.id, f);
         } else {
-          f.bend += SMOOTH * (t.bend - f.bend);
+          // Median of the last three readings drops single-frame glitches before smoothing.
+          const b = median3(f.raw[0], f.raw[1], t.bend);
+          f.raw = [f.raw[1], t.bend];
+          f.bend += SMOOTH * (b - f.bend);
           f.x += SMOOTH * (t.x - f.x);
           f.y += SMOOTH * (t.y - f.y);
         }
@@ -133,11 +142,18 @@ export function createPlayer(piano) {
         f.slot = t.slot;
         f.need = f.thumb ? threshold * THUMB : threshold;
 
-        if (!f.down) {
-          // Resting position: jumps up at once when the finger lifts higher,
-          // and drifts down slowly when the hand settles into a new resting shape.
-          if (f.bend < f.rest) f.rest = f.bend;
-          else f.rest += REST_DRIFT * (f.bend - f.rest);
+        f.warming = now - f.born < WARMUP_MS;
+        if (f.warming) {
+          // Just appeared: tracking is still settling, so simply follow the finger.
+          f.rest = f.bend;
+        } else if (f.down) {
+          f.rest += HELD_DRIFT * (f.bend - f.rest);
+        } else if (f.bend < f.rest) {
+          // Lifted higher: follow quickly, but not in one jump, so a single bad frame can't set it.
+          f.rest -= Math.min(REST_UP_MAX, REST_UP * (f.rest - f.bend));
+        } else {
+          // Settled lower: drift slowly, so the hand can relax into a new resting shape.
+          f.rest += REST_DRIFT * (f.bend - f.rest);
         }
         f.depth = f.bend - f.rest;
 
@@ -194,7 +210,7 @@ export function createPlayer(piano) {
         if (f.seen !== now) continue;
         if (f.down) {
           if (f.depth < f.need * RELEASE) release(f);
-        } else if (f.depth > f.need && !f.blocked && f.aimKey) {
+        } else if (f.depth > f.need && !f.blocked && !f.warming && f.aimKey) {
           if (f.depth < CHORD * deepest.get(f.hand)) {
             f.blocked = true; // dragged along by a neighbour: must relax before it can play
             continue;
