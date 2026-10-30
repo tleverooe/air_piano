@@ -39,6 +39,12 @@ body {
 
 h1 { margin: 0; font-size: 22px; letter-spacing: 0.04em; }
 
+.version {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--muted);
+}
+
 .status {
   margin: 0;
   color: var(--muted);
