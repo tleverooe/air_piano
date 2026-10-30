@@ -1,7 +1,7 @@
 import { startCamera, cameraErrorText } from './camera.js';
 import { createTracker } from './tracker.js';
 import { unlockAudio, createPiano } from './audio.js';
-import { drawKeys } from './keyboard.js';
+import { drawKeys, U_MIN, U_MAX } from './keyboard.js';
 import { createPlayer } from './player.js';
 import { initSettings } from './settings.js';
 
@@ -11,6 +11,7 @@ const ctx = canvas.getContext('2d');
 const stage = document.getElementById('stage');
 const startBtn = document.getElementById('startBtn');
 const statusEl = document.getElementById('status');
+const debugChk = document.getElementById('debugChk');
 
 let tracker = null;
 let player = null;
@@ -57,7 +58,38 @@ function drawFingers(fingers) {
     ctx.lineWidth = 2;
     ctx.strokeStyle = '#11131a';
     ctx.stroke();
+    if (debugChk.checked && f.depth !== undefined) drawDebugBar(f, w, h, r);
   }
+}
+
+// Debug: a bar beside each fingertip showing how far it is bent below its resting position.
+// The white line is the press point, the dashed line the release point.
+// Gold = playing, grey = ignored because a neighbour moved it, red = not over the keyboard.
+function drawDebugBar(f, w, h, r) {
+  const bw = Math.max(6, r * 0.9);
+  const bh = Math.max(40, h * 0.09);
+  const x = f.x * w + r * 1.8;
+  const bottom = f.y * h + bh / 2;
+  const full = threshold * 2; // the bar's height represents twice the press depth
+  const fill = Math.min(1, Math.max(0, f.depth / full));
+  const off = !f.aim || f.aim.u < U_MIN || f.aim.u > U_MAX;
+
+  ctx.fillStyle = 'rgba(17, 19, 26, 0.75)';
+  ctx.fillRect(x, bottom - bh, bw, bh);
+  ctx.fillStyle = f.down ? '#d9a441' : f.blocked ? '#8b90a1' : off ? '#ef7a6b' : '#7fc4a8';
+  ctx.fillRect(x, bottom - bh * fill, bw, bh * fill);
+
+  ctx.fillStyle = '#ece6d6';
+  ctx.fillRect(x - 2, bottom - bh / 2 - 1, bw + 4, 2);
+  ctx.save();
+  ctx.setLineDash([3, 3]);
+  ctx.strokeStyle = '#ece6d6';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(x - 2, bottom - (bh / 2) * 0.45);
+  ctx.lineTo(x + bw + 2, bottom - (bh / 2) * 0.45);
+  ctx.stroke();
+  ctx.restore();
 }
 
 function frame(now) {
