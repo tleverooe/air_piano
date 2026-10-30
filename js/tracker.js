@@ -5,8 +5,10 @@ const MODEL_URL = 'https://storage.googleapis.com/mediapipe-models/hand_landmark
 
 // Landmark indices of the five fingertips: thumb, index, middle, ring, pinky.
 export const TIP_IDS = [4, 8, 12, 16, 20];
-// Knuckle (MCP joint) for each fingertip: bending a finger down moves its tip down relative to this.
-const KNUCKLE_OF = { 4: 2, 8: 5, 12: 9, 16: 13, 20: 17 };
+// Reference point for each fingertip: pressing the finger down moves its tip down relative to this.
+// Fingers use their own knuckle. The thumb presses by swinging the whole thumb down from near the wrist,
+// so its own knuckle moves with the tip; it's measured against the index knuckle instead, which stays put.
+const KNUCKLE_OF = { 4: 5, 8: 5, 12: 9, 16: 13, 20: 17 };
 
 async function createLandmarker(fileset, delegate) {
   return HandLandmarker.createFromOptions(fileset, {

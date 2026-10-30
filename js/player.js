@@ -5,7 +5,7 @@ const RELEASE = 0.45;     // a pressed finger releases once its press depth fall
 const REST_DRIFT = 0.03;  // how quickly a finger's resting position follows it when it settles lower (per frame)
 const CHORD = 0.7;        // within one hand, a finger must press at least this fraction as deep as the deepest to play
 const LOST_MS = 150;      // a finger missing this long is treated as lifted
-const THUMB = 0.7;        // the thumb presses sideways and shows less bend on camera, so it needs less
+const THUMB = 0.6;        // the thumb presses at an angle and shows less movement on camera, so it needs less
 const HAND_KEYS = 5;      // in hand mode, each hand covers this many white keys
 const SHIFT_HYST = 0.35;  // in hand mode, how far (in white keys) past a boundary the hand must move to shift
 // In hand mode, pushing the hand forward so the fingertips sit over the black-key part of the keyboard
