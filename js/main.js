@@ -76,24 +76,38 @@ function drawFingers(fingers) {
   }
 }
 
-// Debug: a horizontal bar at each hand's knuckles showing how far it's pushed forward.
-// Full = switched to black keys.
-function drawPushBars(hands) {
+// Hand mode: a tag above each hand saying whether it's on the white or black keys,
+// with a small meter showing how far it's pushed forward (full = switches to black keys).
+function drawHandTags(hands) {
   const { width: w, height: h } = canvas;
-  const bw = Math.max(60, w * 0.08);
-  const bh = Math.max(6, h * 0.012);
+  const fs = Math.round(Math.max(13, h * 0.026));
+  const tw = fs * 3.4;
+  const th = fs * 1.6;
+  ctx.font = `600 ${fs}px system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
   for (const hd of hands) {
-    const x = hd.x * w - bw / 2;
-    const y = hd.y * h - bh * 3;
-    ctx.fillStyle = 'rgba(17, 19, 26, 0.75)';
-    ctx.fillRect(x, y, bw, bh);
-    ctx.fillStyle = hd.sharp ? '#d9a441' : '#7fc4a8';
-    ctx.fillRect(x, y, bw * Math.min(1, Math.max(0, hd.push)), bh);
-    ctx.font = `600 ${Math.round(bh * 1.8)}px "IBM Plex Mono", ui-monospace, monospace`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'bottom';
-    ctx.fillStyle = '#ece6d6';
-    ctx.fillText(hd.sharp ? '黑键' : '往前推', hd.x * w, y - 2);
+    const cx = hd.x * w;
+    const top = hd.y * h - th * 2.6;
+    const x = cx - tw / 2;
+
+    ctx.beginPath();
+    ctx.roundRect(x, top, tw, th, th / 2);
+    ctx.fillStyle = hd.sharp ? 'rgba(17, 19, 26, 0.92)' : 'rgba(236, 230, 214, 0.92)';
+    ctx.fill();
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = hd.sharp ? '#d9a441' : 'rgba(17, 19, 26, 0.6)';
+    ctx.stroke();
+    ctx.fillStyle = hd.sharp ? '#d9a441' : '#11131a';
+    ctx.fillText(hd.sharp ? '黑键' : '白键', cx, top + th / 2 + 1);
+
+    // Push meter just under the tag.
+    const my = top + th + 4;
+    const mh = Math.max(4, fs * 0.3);
+    ctx.fillStyle = 'rgba(17, 19, 26, 0.7)';
+    ctx.fillRect(x, my, tw, mh);
+    ctx.fillStyle = '#d9a441';
+    ctx.fillRect(x, my, tw * (hd.sharp ? 1 : Math.min(1, Math.max(0, hd.push))), mh);
   }
 }
 
@@ -135,7 +149,7 @@ function frame(now) {
   const fingers = player ? [...player.fingers()] : tips;
   drawKeys(ctx, w, h, keys, geom, fingers, player ? player.held : new Map());
   drawFingers(fingers);
-  if (player && debugChk.checked && mode === 'hand') drawPushBars(player.hands());
+  if (player && mode === 'hand') drawHandTags(player.hands());
   requestAnimationFrame(frame);
 }
 

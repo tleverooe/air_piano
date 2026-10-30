@@ -99,7 +99,7 @@ export function createPlayer(piano) {
   return {
     held,
     fingers: () => fingers.values(),
-    // Hand mode: each hand's knuckle position and how far it's pushed forward, for the debug display.
+    // Hand mode: each hand's knuckle position, how far it's pushed forward (1 = switches), and whether it's on black keys.
     hands: () => [...hands.values()].map((h) => ({ x: h.x, y: h.y, push: h.push / PUSH_IN, sharp: h.sharp })),
 
     // threshold: how far (in hand sizes) a finger must bend below its resting position to press.
