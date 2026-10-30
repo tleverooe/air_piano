@@ -8,7 +8,7 @@ const LOST_MS = 150;      // a finger missing this long is treated as lifted
 const THUMB = 0.6;        // the thumb presses at an angle and shows less movement on camera, so it needs less
 const HAND_KEYS = 5;      // in hand mode, each hand covers this many white keys
 const SHIFT_HYST = 0.35;  // in hand mode, how far (in white keys) past a boundary the hand must move to shift
-// In hand mode, pushing the hand forward (toward the screen) raises every finger a semitone.
+// In hand mode, pushing the hand forward (toward the screen) moves the fingers onto the black keys.
 // On camera a push moves the knuckle row down, so it's measured against where that hand usually sits:
 // its knuckles must drop this many hand sizes below their usual height to switch, and come back
 // within the smaller amount to switch back. The usual height follows the hand slowly when it settles.
@@ -33,26 +33,45 @@ const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 // Which key a finger plays depends on the mode:
 //  - 'hand': the hand's position picks 5 neighbouring white keys and each finger owns one of them,
 //    left to right, like a hand resting on a real keyboard. Move the hand to reach other keys.
+//    Push the hand forward and the fingers own the 5 nearest black keys instead.
 //  - 'aim': the key under the fingertip.
 // Either way the key is chosen while the finger is relaxed and locked in until it lifts.
 export function createPlayer(piano) {
   const fingers = new Map();
   const held = new Map(); // midi -> how many fingers are holding it
-  const windows = new Map(); // hand -> index of the leftmost white key it covers (hand mode)
+  const windows = new Map(); // `${hand}/white` or `${hand}/black` -> index of the leftmost key it covers
   const hands = new Map();   // hand -> { x, y, home, push, sharp } (hand mode)
 
-  // Picks the hand's 5-key window from where its knuckles are, with some stickiness at the boundaries.
-  function handWindow(hand, palmX, palmY, whites, geom) {
-    const n = whites.length;
-    const maxStart = Math.max(0, n - HAND_KEYS);
-    // Only the hand's sideways position counts: read it at a fixed height on the keyboard, so pushing
-    // forward (which moves the knuckles down on screen) doesn't slide the keys across through perspective.
-    const want = toKeyboard(geom, palmX, geom.top + geom.height / 2).s * n - HAND_KEYS / 2;
-    let start = windows.get(hand);
+  // Picks a 5-key window, given where the hand's middle sits as a (fractional) index into the row,
+  // with some stickiness at the boundaries.
+  function stickyStart(id, centre, count) {
+    const want = centre - (HAND_KEYS - 1) / 2;
+    let start = windows.get(id);
     if (start === undefined || Math.abs(want - start) > 0.5 + SHIFT_HYST) start = Math.round(want);
-    start = clamp(start, 0, maxStart);
-    windows.set(hand, start);
+    start = clamp(start, 0, Math.max(0, count - HAND_KEYS));
+    windows.set(id, start);
     return start;
+  }
+
+  // Where position s (0..1 across the keyboard) falls among the black keys, as a fractional index.
+  function blackIndex(blacks, s) {
+    const c = blacks.map((k) => (k.x0 + k.x1) / 2);
+    if (s <= c[0]) return 0;
+    for (let i = 1; i < c.length; i++) {
+      if (s < c[i]) return i - 1 + (s - c[i - 1]) / (c[i] - c[i - 1]);
+    }
+    return c.length - 1;
+  }
+
+  // The hand's white and black windows. Only its sideways position counts: it's read at a fixed height
+  // on the keyboard, so pushing forward (which moves the knuckles down on screen) doesn't slide the keys
+  // across through perspective.
+  function handWindows(hand, palmX, whites, blacks, geom) {
+    const s = toKeyboard(geom, palmX, geom.top + geom.height / 2).s;
+    return {
+      white: stickyStart(`${hand}/white`, s * whites.length - 0.5, whites.length),
+      black: blacks.length ? stickyStart(`${hand}/black`, blackIndex(blacks, s), blacks.length) : null,
+    };
   }
 
   function press(f, key, threshold) {
@@ -87,13 +106,14 @@ export function createPlayer(piano) {
     // mode: 'hand' or 'aim' (see above).
     update(tips, now, keys, geom, threshold, mode = 'hand') {
       const whites = keys.filter((k) => !k.black);
+      const blacks = keys.filter((k) => k.black).sort((a, b) => a.midi - b.midi);
       const starts = new Map();
       if (mode === 'hand') {
         for (const t of tips) {
-          if (!starts.has(t.hand)) starts.set(t.hand, handWindow(t.hand, t.palmX, t.palmY, whites, geom));
+          if (!starts.has(t.hand)) starts.set(t.hand, handWindows(t.hand, t.palmX, whites, blacks, geom));
         }
       }
-      for (const hand of windows.keys()) if (!starts.has(hand)) windows.delete(hand);
+      for (const id of windows.keys()) if (!starts.has(id.split('/')[0])) windows.delete(id);
 
       for (const t of tips) {
         let f = fingers.get(t.id);
@@ -144,16 +164,15 @@ export function createPlayer(piano) {
         }
         for (const hand of hands.keys()) if (!starts.has(hand)) hands.delete(hand);
       }
-      const byMidi = new Map(keys.map((k) => [k.midi, k]));
 
       for (const f of fingers.values()) {
         if (f.seen !== now || !f.relaxed) continue;
         // Relaxed: work out which key this finger would play, and let it play again.
         if (mode === 'hand') {
-          const white = whites[starts.get(f.hand) + f.slot] || null;
-          // Pushed forward: the black key just above, where there is one (not after E or B).
-          const up = white && byMidi.get(white.midi + 1);
-          f.aimKey = hands.get(f.hand)?.sharp && up && up.black ? up : white;
+          const w = starts.get(f.hand);
+          f.aimKey = hands.get(f.hand)?.sharp && w.black !== null
+            ? blacks[w.black + f.slot] || null
+            : whites[w.white + f.slot] || null;
         } else {
           const { s, u } = toKeyboard(geom, f.x, f.y);
           f.aimKey = u >= U_MIN && u <= U_MAX ? keyAt(keys, s, clamp(u, 0, 1)) : null;
