@@ -88,15 +88,10 @@ function quad(ctx, w, h, geom, s0, s1, u0, u1) {
 export function drawKeys(ctx, w, h, keys, geom, fingers, held) {
   if (!keys.length) return;
 
-  // Keys a hovering finger is over, so you can see where a press would land.
+  // Keys the relaxed fingers would play, so you can see where a press would land.
   const hover = new Set();
   for (const f of fingers) {
-    if (f.down) continue;
-    // Show the key the finger is aiming at (where it last rested), which is what a tap will play.
-    const { s, u } = f.aim || toKeyboard(geom, f.x, f.y);
-    if (u < U_MIN || u > U_MAX) continue;
-    const k = keyAt(keys, s, Math.min(1, Math.max(0, u)));
-    if (k) hover.add(k.midi);
+    if (!f.down && f.aimKey) hover.add(f.aimKey.midi);
   }
 
   // Fallboard between the keys and the camera, with the red felt strip along the back edge.
