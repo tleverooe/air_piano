@@ -1,4 +1,4 @@
-import { keyAt, toKeyboard, U_MIN, U_MAX } from './keyboard.js';
+import { keyAt, toKeyboard, U_MIN, U_MAX, BLACK_LEN } from './keyboard.js';
 
 const SMOOTH = 0.5;       // 0..1, higher follows the hand faster, lower is steadier
 const RELEASE = 0.45;     // a pressed finger releases once its press depth falls below this fraction of the threshold
@@ -8,6 +8,11 @@ const LOST_MS = 150;      // a finger missing this long is treated as lifted
 const THUMB = 0.7;        // the thumb presses sideways and shows less bend on camera, so it needs less
 const HAND_KEYS = 5;      // in hand mode, each hand covers this many white keys
 const SHIFT_HYST = 0.35;  // in hand mode, how far (in white keys) past a boundary the hand must move to shift
+// In hand mode, pushing the hand forward so the fingertips sit over the black-key part of the keyboard
+// raises every finger a semitone. These are the fingertip depths (0 = back edge, 1 = front edge) to
+// switch in and back out, a little apart so the hand doesn't flip between them.
+const SHARP_IN = BLACK_LEN - 0.04;
+const SHARP_OUT = BLACK_LEN + 0.06;
 
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 
@@ -32,6 +37,7 @@ export function createPlayer(piano) {
   const fingers = new Map();
   const held = new Map(); // midi -> how many fingers are holding it
   const windows = new Map(); // hand -> index of the leftmost white key it covers (hand mode)
+  const sharp = new Map();   // hand -> true while pushed forward onto the black keys (hand mode)
 
   // Picks the hand's 5-key window from where its knuckles are, with some stickiness at the boundaries.
   function handWindow(hand, palmX, palmY, whites, geom) {
@@ -105,16 +111,39 @@ export function createPlayer(piano) {
         }
         f.depth = f.bend - f.rest;
 
-        if (!f.down && f.depth < f.need * RELEASE) {
-          // Relaxed: work out which key this finger would play, and let it play again.
-          if (mode === 'hand') {
-            f.aimKey = whites[starts.get(f.hand) + f.slot] || null;
-          } else {
-            const { s, u } = toKeyboard(geom, f.x, f.y);
-            f.aimKey = u >= U_MIN && u <= U_MAX ? keyAt(keys, s, clamp(u, 0, 1)) : null;
-          }
-          f.blocked = false;
+        f.relaxed = !f.down && f.depth < f.need * RELEASE;
+      }
+
+      // Hand mode: is each hand pushed forward onto the black keys? Judged from its relaxed fingertips.
+      if (mode === 'hand') {
+        const sum = new Map();
+        for (const f of fingers.values()) {
+          if (f.seen !== now || f.thumb || !f.relaxed) continue;
+          const [total, n] = sum.get(f.hand) || [0, 0];
+          sum.set(f.hand, [total + toKeyboard(geom, f.x, f.y).u, n + 1]);
         }
+        for (const [hand, [total, n]] of sum) {
+          const u = total / n;
+          if (u < SHARP_IN) sharp.set(hand, true);
+          else if (u > SHARP_OUT) sharp.set(hand, false);
+        }
+        for (const hand of sharp.keys()) if (!starts.has(hand)) sharp.delete(hand);
+      }
+      const byMidi = new Map(keys.map((k) => [k.midi, k]));
+
+      for (const f of fingers.values()) {
+        if (f.seen !== now || !f.relaxed) continue;
+        // Relaxed: work out which key this finger would play, and let it play again.
+        if (mode === 'hand') {
+          const white = whites[starts.get(f.hand) + f.slot] || null;
+          // Pushed forward: the black key just above, where there is one (not after E or B).
+          const up = white && byMidi.get(white.midi + 1);
+          f.aimKey = sharp.get(f.hand) && up && up.black ? up : white;
+        } else {
+          const { s, u } = toKeyboard(geom, f.x, f.y);
+          f.aimKey = u >= U_MIN && u <= U_MAX ? keyAt(keys, s, clamp(u, 0, 1)) : null;
+        }
+        f.blocked = false;
       }
 
       // Deepest press per hand, counting fingers already held down.
