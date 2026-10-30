@@ -76,6 +76,27 @@ function drawFingers(fingers) {
   }
 }
 
+// Debug: a horizontal bar at each hand's knuckles showing how far it's pushed forward.
+// Full = switched to black keys.
+function drawPushBars(hands) {
+  const { width: w, height: h } = canvas;
+  const bw = Math.max(60, w * 0.08);
+  const bh = Math.max(6, h * 0.012);
+  for (const hd of hands) {
+    const x = hd.x * w - bw / 2;
+    const y = hd.y * h - bh * 3;
+    ctx.fillStyle = 'rgba(17, 19, 26, 0.75)';
+    ctx.fillRect(x, y, bw, bh);
+    ctx.fillStyle = hd.sharp ? '#d9a441' : '#7fc4a8';
+    ctx.fillRect(x, y, bw * Math.min(1, Math.max(0, hd.push)), bh);
+    ctx.font = `600 ${Math.round(bh * 1.8)}px "IBM Plex Mono", ui-monospace, monospace`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'bottom';
+    ctx.fillStyle = '#ece6d6';
+    ctx.fillText(hd.sharp ? '黑键' : '往前推', hd.x * w, y - 2);
+  }
+}
+
 // Debug: a bar beside each fingertip showing how far it is bent below its resting position.
 // The white line is the press point, the dashed line the release point.
 // Gold = playing, grey = ignored because a neighbour moved it, red = not over the keyboard.
@@ -114,6 +135,7 @@ function frame(now) {
   const fingers = player ? [...player.fingers()] : tips;
   drawKeys(ctx, w, h, keys, geom, fingers, player ? player.held : new Map());
   drawFingers(fingers);
+  if (player && debugChk.checked && mode === 'hand') drawPushBars(player.hands());
   requestAnimationFrame(frame);
 }
 

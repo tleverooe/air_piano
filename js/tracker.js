@@ -37,6 +37,7 @@ export async function createTracker() {
     // Returns fingertips as { id, hand, x, y, bend }: x, y in 0..1 (x mirrored to match the screen).
     // bend is how far the tip hangs below its own knuckle, in hand sizes; it grows as the finger presses down.
     // palmX, palmY: the middle of the hand's knuckle row (same for all five tips of a hand).
+    // palmSize: the hand's size (wrist to middle knuckle) in frame-height units.
     // slot: 0..4, the finger's place in the hand from left to right on screen (thumb is 0 or 4).
     detect(video, now) {
       if (video.currentTime === lastVideoTime) return lastTips;
@@ -70,6 +71,7 @@ export async function createTracker() {
             slot: thumbLeft ? i : 4 - i,
             palmX,
             palmY,
+            palmSize: scale / aspect,
           });
         });
       });
